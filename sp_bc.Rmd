@@ -1,0 +1,308 @@
+---
+title: "teste_sp"
+output: html_document
+date: "2023-07-23"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(scales)
+library(plotly)
+
+options(repos = "https://cran-r.c3sl.ufpr.br/")
+
+install.packages("bigrquery")
+library(bigrquery)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+library(grid)
+library(summarytools)
+library(basedosdados)
+library(dplyr)
+library(readr)
+library(readxl)
+library(writexl)
+library(stringr)
+library(lubridate)
+library(magrittr)
+library(scales)
+library(ggplot2)
+library(gganimate)
+library(tidyr)
+library(transformr)
+library(plotly)
+library(hrbrthemes)
+library(ggthemes)
+
+options(repos = c(CRAN = "https://cran.r-project.org"))
+
+rm(list=ls())
+
+set_billing_id("centered-router-387500")
+
+# Exportação Paraná
+
+query.S.E <- "SELECT  ano,mes,id_sh4,id_pais,sigla_uf,id_municipio,valor_fob_dolar FROM
+`basedosdados.br_me_comex_stat.municipio_exportacao`WHERE ano BETWEEN 
+        2000 AND 2022 AND id_municipio LIKE '35%'"
+
+TotalExp <- read_sql(query.S.E)
+
+str(TotalExp)
+
+# Alterando as váriaveis necessárias para número
+
+SPTotal <- TotalExp %>% 
+  mutate(ID.pais.novo=as.numeric(TotalExp$id_pais)) %>% 
+  mutate(Exp.FOB.SP=as.numeric(TotalExp$valor_fob_dolar)) %>% 
+  mutate(Ano=as.numeric(TotalExp$ano))
+
+str(SPTotal)
+
+# Excluindo variáveis duplicadas
+
+excluir <- c("ano","valor_fob_dolar","id_pais")
+Dados_SP <- SPTotal [,!names(SPTotal)%in%excluir]
+
+str(SPTotal)
+
+# Agrupando por ano e município 
+# Utilizando a função summarise do pacote dplyr para somar as exportações de cada ano
+
+
+SPTotal3 <- Dados_SP %>% 
+  group_by(Ano) %>% 
+  summarise(EXP_fob_SP = sum(Exp.FOB.SP, na.rm = T))
+
+# Filtrando o município de Foz do Iguaçu e renomeando a variável das exportações FOB
+
+Dados_SPP <- Dados_SP %>% 
+  filter(id_municipio == "3550308") %>% 
+  mutate(id_municipio = case_when(id_municipio == '3550308' ~ 'São Paulo')) %>% 
+  rename(Exp.FOB.SPP = Exp.FOB.SP)
+
+# Agrupando por ano e somando as exportações de cada ano de Foz do iguaçu
+
+SPPTotal3 <- Dados_SPP %>% 
+  group_by(Ano) %>% 
+  summarise(valor_FOB_SPP=sum(Exp.FOB.SPP,na.rm=T))
+
+# Iniciando um novo data frame contendo as variáveis: Exportações do Paraná e Foz do iguaçu
+
+data.frame(SPTotal3, SPPTotal3)
+
+SP_SPP <- data.frame(SPTotal3,SPPTotal3)
+
+# Importação São Paulo
+
+query.S.I <- "SELECT  ano,mes,id_sh4,id_pais,sigla_uf,id_municipio,valor_fob_dolar FROM
+`basedosdados.br_me_comex_stat.municipio_importacao`WHERE ano BETWEEN 
+        2000 AND 2022 AND id_municipio LIKE '35%'"
+
+TotalImp <- read_sql(query.S.I)
+
+str(TotalImp)
+
+# Alterando váriaveis necessárias para número
+
+SPImp <- TotalImp %>% 
+  mutate(id_pais_Imp=as.numeric(TotalImp$id_pais)) %>% 
+  mutate(Imp_FOB_SP=as.numeric(TotalImp$valor_fob_dolar)) %>% 
+  mutate(Ano=as.numeric(TotalImp$ano))
+
+str(SPImp)  
+
+# Excluindo variáveis duplicadas
+
+SPImpTotal <- SPImp
+excluir <- c("valor_fob_dolar","id_pais","ano")
+Dados_Imp_SP <- SPImp[,!names(SPImp)%in%excluir]
+
+str(Dados_Imp_SP)
+
+# Agrupando por ano e município 
+# Utilizando a função summarise do pacote dplyr para somar as exportações de cada ano
+
+SPImp3 <- Dados_Imp_SP %>% 
+  group_by(Ano) %>% 
+  summarise(Imp_SP_FOB=sum(Imp_FOB_SP,na.rm = T))
+
+
+# Filtrando o município de Foz do Iguaçu e renomeando a variável das importações FOB
+
+Imp_SPP <- Dados_Imp_SP %>% 
+  filter(id_municipio == "3550308") %>% 
+  mutate(id_municipio = case_when(id_municipio == '3550308' ~ 'São Paulo'))
+
+Dados_SPP_Imp <- Imp_SPP %>% 
+  rename(Imp_FOB_SPP = Imp_FOB_SP)
+
+# Agrupando por ano e somando as importações de cada ano de Foz do iguaçu
+
+ImpTotalSPP <- Dados_SPP_Imp %>% 
+  group_by(Ano) %>% 
+  summarise(Imp_SPP_FOB=sum(Imp_FOB_SPP,na.rm = T))
+
+# Iniciando um novo data frame contendo as variáveis: Imporações do Paraná e Foz do iguaçu
+
+data.frame(SPImp3,ImpTotalSPP)
+Imp_SP_SPP <- data.frame(SPImp3,ImpTotalSPP)
+
+# Cálculo para encotrar o saldo da balança comercial da Capital
+
+Exp_Imp <- left_join(SP_SPP,Imp_SP_SPP,by="Ano")
+head(Exp_Imp)
+
+excluir <- c("Ano.1.x","Ano.1.y")
+Exp_Imp <- Exp_Imp[,!names(Exp_Imp)%in%excluir]
+head(Exp_Imp)
+
+SBC_dataframe <- mutate(Exp_Imp,SBCSP=EXP_fob_SP-Imp_SP_FOB) %>% 
+  mutate(Exp_Imp,SBCSPP = valor_FOB_SPP-Imp_SPP_FOB)
+
+str(SBC_dataframe)
+
+# Reorganizando a tabela adicionando uma nova coluna "vars"
+
+GRAFSP <- SBC_dataframe %>% 
+  select(Ano,Imp_SP_FOB,SBCSP,EXP_fob_SP) %>% 
+  pivot_longer(cols = !Ano,names_to = "vars",values_to = "SP")
+
+# 5 - GRÁFICO DO SALDO DA BALANÇA COMERCIAL - coluna - PARANÁ
+
+ggplot(GRAFSP) +
+  geom_col(aes(x = Ano, y = SP, fill = vars), width = 0.6, position = "dodge") +
+  scale_fill_manual(values = c('slateblue4', 'mediumvioletred', 'mediumspringgreen'),
+                    labels = c('Exportações', 'Importações', 'Saldo da Balança Comercial')) +
+  labs(x = NULL, y = 'Importações, Exportações, Saldo da Balança Comercial [US$]', fill = '',
+       title = "Balança Comercial - São Paulo",
+       subtitle = 'Dados Anuais - 2000 a 2022',
+       caption = "Lucas Freire Bauer Santos") +
+  theme_light() +
+  theme(legend.position = "top",
+        panel.background = element_rect(fill = "white", color = "white"),
+        panel.border = element_rect(color = "black", fill = NA, size = 1),
+        panel.grid.major = element_line(color = "azure2"),
+        panel.grid.minor = element_line(color = "azure2"),
+        plot.title = element_text(face = "bold", size = 20, hjust = 0, vjust = 1),
+        plot.subtitle = element_text(face = "bold", size = 16, hjust = 0, vjust = 1),
+        axis.text.x.bottom = element_text(size = 10, face = "bold", color = "black"),
+        axis.text.y.left = element_text(size = 10, face = "bold", color = "black"),
+        axis.title.y.left = element_text(size = 12, face = "italic", color = "black"),
+        axis.text.y.right = element_text(size = 10, face = "bold", color = "black"),
+        axis.title.y.right = element_text(size = 12, face = "italic", color = "black"),
+        plot.margin = margin(2, 2, 2, 2, "cm"),
+        legend.text = element_text(face = "bold"))
+
+
+
+# Utiliazando GGPLOTLY (gráfico linha/coluna extra)
+
+SaldoSP <- ggplot(GRAFSP) +
+  geom_col(aes(x = Ano, y = SP, fill = vars), width = 0.6, position = "dodge") +
+  scale_fill_manual(values = c('slateblue4', 'mediumvioletred', 'mediumspringgreen'),
+                    labels = c('Exportações', 'Importações', 'Saldo da Balança Comercial')) +
+  labs(x = NULL, y = 'Importações, Exportações, Saldo da Balança Comercial [US$]', fill = '',
+       title = "Balança Comercial - São Paulo",
+       subtitle = 'Dados Anuais - 2000 a 2022',
+       caption = "Lucas Freire Bauer Santos") +
+  theme_light() +
+  theme(legend.position = "top",
+        panel.background = element_rect(fill = "white", color = "white"),
+        panel.border = element_rect(color = "black", fill = NA, size = 1),
+        panel.grid.major = element_line(color = "azure2"),
+        panel.grid.minor = element_line(color = "azure2"),
+        plot.title = element_text(face = "bold", size = 20, hjust = 0, vjust = 1),
+        plot.subtitle = element_text(face = "bold", size = 16, hjust = 0, vjust = 1),
+        axis.text.x.bottom = element_text(size = 10, face = "bold", color = "black"),
+        axis.text.y.left = element_text(size = 10, face = "bold", color = "black"),
+        axis.title.y.left = element_text(size = 12, face = "italic", color = "black"),
+        axis.text.y.right = element_text(size = 10, face = "bold", color = "black"),
+        axis.title.y.right = element_text(size = 12, face = "italic", color = "black"),
+        plot.margin = margin(2, 2, 2, 2, "cm"),
+        legend.text = element_text(face = "bold"))
+
+ggplotly(SaldoSP)
+
+
+# Reorganizando a tabela adicionando uma nova coluna "vars", agora com as variáveis referente a FOZ
+
+GRAFSPP <- SBC_dataframe %>% 
+  select(Ano,Imp_SPP_FOB,SBCSPP,valor_FOB_SPP) %>% 
+  pivot_longer(cols = !Ano,names_to = "vars",values_to = "SPP")
+
+# 6 - GRÁFICO DO SALDO DA BALANÇA COMERCIAL - colunas - FOZ DO IGUAÇU
+
+ggplot(GRAFSPP)+
+  geom_col(aes(x=Ano,y=SPP,fill=vars),width=0.6,position = "dodge")+
+  scale_fill_manual(values = c('mediumvioletred','mediumspringgreen','slateblue4'),
+                    labels=c('Importações','Saldo da Balança Comercial','Exportações'))+
+  labs(x=NULL,y='Importações, Exportações, Saldo da Balança Comercial [US$]', fill='',
+       title = "Balança Comercial - São Paulo Capital",
+       subtitle = 'Dados Anuais - 2000 a 2022',
+       caption = "Lucas Freire Bauer Santos")+
+  theme_light()+
+  theme(legend.position = "top",
+        panel.background = element_rect(fill = "white", color = "white"),
+        panel.border = element_rect(color = "black", fill = NA, size = 1),
+        panel.grid.major = element_line(color = "azure2"),
+        panel.grid.minor = element_line(color = "azure2"),
+        plot.title = element_text(face = "bold", size = 20, hjust = 0, vjust = 1),
+        plot.subtitle = element_text(face = "bold", size = 16, hjust = 0, vjust = 1),
+        axis.text.x.bottom = element_text(size = 10, face = "bold", color = "black"),
+        axis.text.y.left = element_text(size = 10, face = "bold", color = "black"),
+        axis.title.y.left = element_text(size = 12, face = "italic", color = "black"),
+        axis.text.y.right = element_text(size = 10, face = "bold", color = "black"),
+        axis.title.y.right = element_text(size = 12, face = "italic", color = "black"),
+        plot.margin = margin(2, 2, 2, 2, "cm"),
+        legend.text=element_text(face="bold", color = "black"))
+
+
+# Utiliazando GGPLOTLY (gráfico linha/coluna extra)
+
+SaldoSPP <- ggplot(GRAFSPP)+
+  geom_col(aes(x=Ano,y=SPP,fill=vars),width=0.6,position = "dodge")+
+  scale_fill_manual(values = c('mediumvioletred','mediumspringgreen','slateblue4'),
+                    labels=c('Importações','Saldo da Balança Comercial','Exportações'))+
+  labs(x=NULL,y='Importações, Exportações, Saldo da Balança Comercial [US$]', fill='',
+       title = "Balança Comercial - São Paulo Capital",
+       subtitle = 'Dados Anuais - 2000 a 2022',
+       caption = "Lucas Freire Bauer Santos")+
+  theme_light()+
+  theme(legend.position = "top",
+        panel.background = element_rect(fill = "white", color = "white"),
+        panel.border = element_rect(color = "black", fill = NA, size = 1),
+        panel.grid.major = element_line(color = "azure2"),
+        panel.grid.minor = element_line(color = "azure2"),
+        plot.title = element_text(face = "bold", size = 20, hjust = 0, vjust = 1),
+        plot.subtitle = element_text(face = "bold", size = 16, hjust = 0, vjust = 1),
+        axis.text.x.bottom = element_text(size = 10, face = "bold", color = "black"),
+        axis.text.y.left = element_text(size = 10, face = "bold", color = "black"),
+        axis.title.y.left = element_text(size = 12, face = "italic", color = "black"),
+        axis.text.y.right = element_text(size = 10, face = "bold", color = "black"),
+        axis.title.y.right = element_text(size = 12, face = "italic", color = "black"),
+        plot.margin = margin(2, 2, 2, 2, "cm"),
+        legend.text=element_text(face="bold", color = "black"))
+
+ggplotly(SaldoSPP)
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
